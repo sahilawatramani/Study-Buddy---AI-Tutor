@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Buddy - AI Cognitive Tutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020617; /* slate-950 */
+        }
+        .glass-card {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
+            border-bottom-color: #818cf8; /* indigo-400 */
+            border-radius: 50%;
+            display: inline-block;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+        }
+        @keyframes rotation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        
+        .main-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
+        @media (min-width: 1024px) { .main-grid { grid-template-columns: 450px 1fr; } }
+        .content-panel { min-height: 600px; }
+        .tab { cursor: pointer; padding: 10px 16px; border-bottom: 2px solid transparent; transition: all 0.3s ease; }
+        .tab.active { color: #818cf8; border-bottom-color: #818cf8; }
+        .tab-content { display: none; }
+        .tab-content.active { display: flex; }
+        .glow-border { position: relative; transition: all 0.3s ease; }
+        .glow-border::before {
+            content: ''; position: absolute; top: -1px; left: -1px; right: -1px; bottom: -1px;
+            background: conic-gradient(from 180deg at 50% 50%, #60a5fa, #818cf8, #38bdf8, #60a5fa);
+            z-index: -1; border-radius: inherit; opacity: 0; transition: opacity 0.3s ease;
+        }
+        .glow-border:hover::before, .glow-border.active::before { opacity: 1; }
+        .roadmap-item:hover { transform: translateY(-2px); border-color: rgba(129, 140, 248, 0.7); }
+        .code-block { position: relative; }
+        .copy-btn {
+            position: absolute; top: 0.5rem; right: 0.5rem; background-color: #334155;
+            color: #94a3b8; border: none; padding: 0.25rem 0.5rem; border-radius: 0.375rem;
+            cursor: pointer; opacity: 0; transition: opacity 0.2s;
+        }
+        .code-block:hover .copy-btn { opacity: 1; }
+        .quiz-option { transition: all 0.2s ease-in-out; }
+        /* Chat bubble styles */
+        .chat-bubble-user { background-color: #4338ca; align-self: flex-end; }
+        .chat-bubble-ai { background-color: #374151; align-self: flex-start; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-slate-950 via-slate-900 to-black text-slate-200">
+    <div class="container mx-auto p-4 md:p-6 lg:p-8">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-violet-500 mb-2" style="text-shadow: 0 0 20px rgba(129, 140, 248, 0.3);">Study Buddy</h1>
+            <p class="text-slate-400 max-w-2xl mx-auto">Your personal AI cognitive tutor for mastering complex topics.</p>
+        </header>
+
+        <!-- Input Section -->
+        <div class="max-w-2xl mx-auto mb-10">
+            <div class="relative">
+                <input id="topicInput" type="text" placeholder="What do you want to learn? (e.g., 'Master Neural Networks')" class="w-full pl-4 pr-44 py-3 bg-slate-800/50 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all duration-300" />
+                <button id="generateBtn" class="absolute top-1/2 right-2 -translate-y-1/2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-md transition-all duration-300 flex items-center justify-center gap-2">
+                    <i data-lucide="compass"></i>
+                    <span>Generate Roadmap</span>
+                </button>
+            </div>
+        </div>
+        
+        <div id="errorDisplay" class="hidden max-w-4xl mx-auto p-4 mb-4 text-sm text-red-400 bg-red-900/50 rounded-lg" role="alert">
+          <span class="font-medium">Error:</span> <span id="errorMessage"></span>
+        </div>
+
+        <!-- Main Content Area -->
+        <main id="output" class="max-w-7xl mx-auto main-grid">
+            <!-- Roadmap Panel -->
+            <div id="roadmap-panel" class="glass-card rounded-xl p-4 lg:p-6 flex flex-col">
+                <h2 class="text-2xl font-bold mb-4 flex items-center gap-2 text-slate-100"><i data-lucide="map" class="text-indigo-400"></i> Learning Roadmap</h2>
+                <div id="loader" class="text-center py-10 hidden"><div class="loader mx-auto"></div><p class="mt-4 text-slate-400">Generating roadmap...</p></div>
+                <div id="roadmapContainer" class="space-y-2 flex-grow overflow-y-auto pr-2">
+                    <div class="text-center pt-16 text-slate-500"><i data-lucide="drafting-compass" class="w-16 h-16 mx-auto"></i><p class="mt-4">Your personalized learning plan will appear here.</p></div>
+                </div>
+            </div>
+
+            <!-- Content Panel -->
+            <div id="content-panel" class="glass-card rounded-xl flex flex-col">
+                 <div id="welcomeMessage" class="text-center m-auto text-slate-400 p-6">
+                     <i data-lucide="book-open-check" class="w-24 h-24 mx-auto text-slate-500"></i>
+                     <h2 class="text-2xl font-bold mt-4 text-slate-300">Welcome to Your Study Zone</h2>
+                     <p class="mt-2 max-w-md mx-auto">Enter a topic to generate a roadmap. Select a step to get a detailed explanation and test your knowledge with an AI-generated quiz.</p>
+                </div>
+                <div id="mainContent" class="hidden flex-grow flex flex-col">
+                    <div class="border-b border-slate-700 px-6">
+                        <nav class="flex -mb-px" id="tabs">
+                            <a class="tab active" data-tab="explanation"><i data-lucide="file-text" class="inline-block mr-2 h-4 w-4"></i>Explanation</a>
+                            <a class="tab" data-tab="quiz"><i data-lucide="brain-circuit" class="inline-block mr-2 h-4 w-4"></i>Smart Quiz</a>
+                            <a class="tab" data-tab="tutor"><i data-lucide="message-circle" class="inline-block mr-2 h-4 w-4"></i>AI Tutor</a>
+                        </nav>
+                    </div>
+                    <div class="p-6 flex-grow overflow-y-auto">
+                        <div id="explanationContent" class="tab-content active flex-col"></div>
+                        <div id="quizContent" class="tab-content flex-col"></div>
+                        <div id="tutorContent" class="tab-content flex-col"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Compare & Contrast Section -->
+        <section class="max-w-7xl mx-auto mt-8">
+            <div class="glass-card rounded-xl p-6">
+                 <h2 class="text-2xl font-bold mb-4 flex items-center gap-2 text-slate-100"><i data-lucide="git-compare-arrows" class="text-indigo-400"></i> Compare & Contrast</h2>
+                 <p class="text-slate-400 mb-4">Enter two concepts to get an AI-generated comparison table.</p>
+                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                    <input id="concept1" type="text" placeholder="Concept 1 (e.g., Supervised Learning)" class="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <input id="concept2" type="text" placeholder="Concept 2 (e.g., Unsupervised Learning)" class="w-full px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                 </div>
+                 <button id="compareBtn" class="mt-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-md transition-all duration-300 flex items-center justify-center gap-2 w-full md:w-auto">
+                    <i data-lucide="git-compare-arrows"></i>
+                    <span>Generate Comparison</span>
+                </button>
+                <div id="comparisonResult" class="mt-6 prose prose-invert max-w-none prose-table:border-slate-700 prose-th:text-slate-100 prose-th:border-slate-600 prose-td:border-slate-700"></div>
+            </div>
+        </section>
+
+    </div>
+
+    <script type="module">
+        lucide.createIcons();
+        
+        // --- DOM Elements ---
+        const topicInput = document.getElementById('topicInput');
+        const generateBtn = document.getElementById('generateBtn');
+        const loader = document.getElementById('loader');
+        const roadmapContainer = document.getElementById('roadmapContainer');
+        const errorDisplay = document.getElementById('errorDisplay');
+        const errorMessage = document.getElementById('errorMessage');
+        const welcomeMessage = document.getElementById('welcomeMessage');
+        const mainContent = document.getElementById('mainContent');
+        const tabs = document.getElementById('tabs');
+        const explanationContent = document.getElementById('explanationContent');
+        const quizContent = document.getElementById('quizContent');
+        const tutorContent = document.getElementById('tutorContent');
+        const compareBtn = document.getElementById('compareBtn');
+        const comparisonResult = document.getElementById('comparisonResult');
+
+        // --- State ---
+        let currentTopic = '';
+        let currentRoadmap = [];
+        let progress = {};
+        let selectedStep = null;
+        let chatHistory = [];
+
+        // --- Core Functions (API, Error Handling) ---
+        function showError(message) { 
+            errorMessage.textContent = message;
+            errorDisplay.classList.remove('hidden');
+            loader.classList.add('hidden');
+        }
+        function hideError() { 
+            errorDisplay.classList.add('hidden');
+        }
+
+        async function callAIApi(systemPrompt, isJson = true) {
+            let attempt = 0;
+            while (attempt < 3) {
+                try {
+                    const response = await fetch(`/generate`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: systemPrompt, is_json: isJson })
+                    });
+                    if (!response.ok) {
+                        const errorBody = await response.json();
+                        throw new Error(`API Error: ${errorBody.error || response.statusText}`);
+                    }
+                    const result = await response.json();
+                    return isJson ? result : result.text;
+                } catch (error) {
+                    attempt++;
+                    if (attempt >= 3) throw error;
+                    await new Promise(res => setTimeout(res, Math.pow(2, attempt) * 1000));
+                }
+            }
+        }
+        
+        // --- Roadmap & Progress Functions ---
+        async function generateRoadmap() {
+            currentTopic = topicInput.value.trim();
+            if (!currentTopic) { showError("Please enter a topic to learn."); return; }
+            hideError();
+            loader.classList.remove('hidden');
+            roadmapContainer.innerHTML = '';
+            welcomeMessage.classList.remove('hidden');
+            mainContent.classList.add('hidden');
+            generateBtn.disabled = true;
+
+            try {
+                const systemPrompt = `Act as an expert AI/ML curriculum designer. For the main topic '${currentTopic}', create a 7-10 step learning roadmap. Each step needs a 'title' and a brief 'description'. Respond ONLY with a valid JSON array.`;
+                currentRoadmap = await callAIApi(systemPrompt, true);
+                const savedProgress = localStorage.getItem(`progress_${currentTopic}`);
+                progress = savedProgress ? JSON.parse(savedProgress) : {};
+                displayRoadmap();
+            } catch (error) {
+                showError(error.message || "Failed to generate roadmap.");
+            } finally {
+                loader.classList.add('hidden');
+                generateBtn.disabled = false;
+            }
+        }
+
+        function displayRoadmap() {
+            roadmapContainer.innerHTML = '';
+            currentRoadmap.forEach((step) => {
+                const isCompleted = progress[step.title];
+                const stepElement = document.createElement('div');
+                stepElement.className = `roadmap-item border border-slate-700 rounded-lg p-3 flex items-start gap-3 cursor-pointer hover:bg-slate-800/50 transition-all duration-200 ${isCompleted ? 'bg-emerald-900/30 border-emerald-700' : ''}`;
+                stepElement.innerHTML = `
+                    <input type="checkbox" ${isCompleted ? 'checked' : ''} class="mt-1 flex-shrink-0 accent-indigo-500 bg-slate-700 border-slate-500 rounded" onclick="event.stopPropagation(); toggleComplete('${step.title.replace(/'/g, "\\'")}')">
+                    <div class="flex-grow" onclick="getTopicDetails(this.parentElement)">
+                        <h3 class="font-semibold text-slate-100 ${isCompleted ? 'line-through text-slate-400' : ''}">${step.title}</h3>
+                        <p class="text-slate-400 text-sm ${isCompleted ? 'line-through' : ''}">${step.description}</p>
+                    </div>
+                `;
+                stepElement.dataset.step = JSON.stringify(step);
+                roadmapContainer.appendChild(stepElement);
+            });
+        }
+        
+        window.toggleComplete = (title) => {
+            progress[title] = !progress[title];
+            localStorage.setItem(`progress_${currentTopic}`, JSON.stringify(progress));
+            displayRoadmap();
+        };
+
+        // --- Content Display & Interaction Functions ---
+        window.getTopicDetails = async (element) => {
+            selectedStep = JSON.parse(element.dataset.step);
+            chatHistory = []; // Reset chat history for the new topic
+            document.querySelectorAll('#roadmapContainer > div').forEach(el => el.classList.remove('glow-border', 'active'));
+            element.classList.add('glow-border', 'active');
+            
+            welcomeMessage.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+            
+            explanationContent.innerHTML = quizContent.innerHTML = tutorContent.innerHTML = '<div class="m-auto text-center"><div class="loader"></div></div>';
+            switchTab('explanation');
+
+            try {
+                const systemPrompt = `
+                Act as a world-class educator and technical writer. Your goal is to explain the sub-topic '${selectedStep.title}' to a beginner who is ultimately trying to master the main topic of '${currentTopic}'.
+
+                Structure your response in the following way:
+                1.  **The "Why"**: Start with a section explaining EXACTLY why this sub-topic is crucial for understanding '${currentTopic}'. Use a simple, real-world analogy.
+                2.  **Core Concepts**: A detailed but beginner-friendly breakdown of the core concepts of '${selectedStep.title}'. Use markdown for structure (e.g., '## Key Terminology').
+                3.  **Connecting to the Main Topic**: A dedicated section explaining how the concepts you just described are directly applied within '${currentTopic}'.
+
+                You must generate a valid JSON object with the following keys:
+                - "explanation": A string containing the full explanation structured as described above.
+                - "codeExample": A relevant and well-commented Python code example that demonstrates the concept. (null if not applicable).
+                - "resources": An array of 2 objects, each with 'title' and 'url' keys for further learning.`;
+                
+                const details = await callAIApi(systemPrompt, true);
+                displayExplanation(details);
+                // Pass the full explanation text to the quiz generator
+                generateQuiz(details.explanation || ""); 
+                setupTutor();
+            } catch (error)
+                 {
+                explanationContent.innerHTML = `<p class="text-red-400 m-auto">Failed to load details. ${error.message}</p>`;
+            }
+        }
+        
+        function parseMarkdown(text) {
+            const lines = text.split('\n');
+            let html = '';
+            let inList = false;
+            for (const line of lines) {
+                if (line.startsWith('## ')) {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    html += `<h3 class="text-xl font-semibold mt-6 mb-3 text-sky-300">${line.substring(3)}</h3>`;
+                } else if (line.startsWith('* ')) {
+                    if (!inList) { html += '<ul class="list-disc list-inside space-y-2 mt-2">'; inList = true; }
+                    html += `<li>${line.substring(2)}</li>`;
+                } else {
+                    if (inList) { html += '</ul>'; inList = false; }
+                    if (line.trim() !== '') {
+                        html += `<p class="leading-relaxed">${line}</p>`;
+                    }
+                }
+            }
+            if (inList) { html += '</ul>'; }
+            return html;
+        }
+
+        function displayExplanation(details) {
+             const explanationText = details.explanation || "No explanation was provided.";
+            const codeExampleText = details.codeExample || null;
+            const explanationHtml = parseMarkdown(explanationText);
+
+            let codeHtml = codeExampleText ? `<h4 class="text-lg font-semibold mt-6 mb-2 text-indigo-400">Code Example</h4><div class="code-block"><pre class="bg-slate-900/70 p-4 rounded-md text-sm overflow-x-auto"><code>${codeExampleText.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre><button class="copy-btn"><i data-lucide="copy" class="h-4 w-4"></i></button></div>` : '';
+            let resourcesHtml = (Array.isArray(details.resources) && details.resources.length) ? `<h4 class="text-lg font-semibold mt-6 mb-2 text-indigo-400">Further Learning</h4><ul class="space-y-2 list-disc list-inside">${details.resources.map(res => `<li><a href="${res.url}" target="_blank" rel="noopener noreferrer" class="text-emerald-400 hover:underline">${res.title || 'Untitled'}</a></li>`).join('')}</ul>` : '';
+
+            explanationContent.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <h2 class="text-2xl font-bold text-indigo-400 mb-4">${selectedStep.title}</h2>
+                    <button id="visualizeBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-semibold px-3 py-1.5 rounded-md text-sm flex items-center gap-2"><i data-lucide="image"></i>Visualize It</button>
+                </div>
+                <div id="visualizationResult" class="mb-4 p-4 bg-slate-900/50 rounded-lg hidden font-mono text-sky-300 whitespace-pre-wrap"></div>
+                <div class="prose prose-invert prose-p:text-slate-300 max-w-none">
+                    ${explanationHtml}
+                    ${codeHtml}
+                    ${resourcesHtml}
+                </div>
+            `;
+            
+            explanationContent.querySelector('#visualizeBtn').addEventListener('click', generateVisualization);
+            explanationContent.querySelectorAll('.copy-btn').forEach(btn => {
+                btn.addEventListener('click', () => { 
+                     const code = btn.previousElementSibling.querySelector('code').innerText;
+                    navigator.clipboard.writeText(code).then(() => {
+                        btn.innerHTML = '<i data-lucide="check" class="h-4 w-4 text-emerald-400"></i>';
+                        setTimeout(() => {
+                            btn.innerHTML = '<i data-lucide="copy" class="h-4 w-4"></i>';
+                            lucide.createIcons();
+                        }, 2000);
+                        lucide.createIcons();
+                    });
+                });
+            });
+
+            lucide.createIcons();
+        }
+
+        async function generateVisualization() {
+            const resultDiv = document.getElementById('visualizationResult');
+            resultDiv.classList.remove('hidden');
+            resultDiv.innerHTML = '<div class="loader h-6 w-6"></div>';
+
+            try {
+                const systemPrompt = `Create a simple, text-based visual representation for the concept: '${selectedStep.title}', keeping in mind the main topic is '${currentTopic}'. Use characters like ->, |, +, -, etc. Keep it clear and concise.`;
+                const visualization = await callAIApi(systemPrompt, false);
+                resultDiv.textContent = visualization;
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+        
+        // --- Smart Quiz Functions ---
+        async function generateQuiz(explanationText) {
+             try {
+                if (!explanationText) {
+                    quizContent.innerHTML = `<p class="text-slate-400 m-auto">Could not generate a quiz as no explanation content was available.</p>`;
+                    return;
+                }
+                
+                const systemPrompt = `
+                You are an expert assessment creator. Your task is to create a 5-question multiple-choice quiz based EXCLUSIVELY on the following learning material.
+
+                **Learning Material:**
+                ---
+                ${explanationText}
+                ---
+
+                **CRITICAL INSTRUCTIONS:**
+                1.  **Source Material is King:** Every single question must be answerable using only the information provided in the "Learning Material" above. Do not use any external knowledge.
+                2.  **Application, Not Memorization:** Create questions that require the user to apply the concepts from the text, rather than just repeating definitions.
+                3.  **Rich Explanations:** For each question, provide a detailed 'explanation' for why the correct answer is right, referencing the concepts from the provided "Learning Material".
+
+                Respond ONLY with a valid JSON array of objects, where each object has keys: "question", "options" (array of 4 strings), "correctAnswer" (string), and "explanation" (string).`;
+                
+                const quizData = await callAIApi(systemPrompt, true);
+                displayQuiz(quizData);
+            } catch (error) {
+                quizContent.innerHTML = `<p class="text-red-400 m-auto">Failed to generate quiz. ${error.message}</p>`;
+            }
+        }
+
+        function displayQuiz(quizData) {
+            let quizHtml = `<h2 class="text-2xl font-bold text-indigo-400 mb-6">Smart Quiz: ${selectedStep.title}</h2>`;
+            quizData.forEach((q, index) => {
+                quizHtml += `
+                    <div class="mb-6" id="q-${index}">
+                        <p class="font-semibold mb-3">${index + 1}. ${q.question}</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${q.options.map(opt => `<button data-correct="${opt === q.correctAnswer}" class="quiz-option text-left p-3 bg-slate-800 border border-slate-700 rounded-lg hover:bg-slate-700/50">${opt}</button>`).join('')}
+                        </div>
+                        <div class="feedback-panel mt-3 p-3 bg-slate-900/50 rounded-lg hidden text-sm"><p class="font-bold">Explanation:</p><p class="feedback-text text-slate-300"></p></div>
+                    </div>
+                `;
+            });
+            quizContent.innerHTML = quizHtml;
+            quizContent.querySelectorAll('.quiz-option').forEach(btn => {
+                btn.onclick = (e) => {
+                    const parent = e.target.closest('[id^="q-"]');
+                    const questionIndex = parseInt(parent.id.split('-')[1]);
+                    const explanation = quizData[questionIndex].explanation;
+                    
+                    parent.querySelectorAll('.quiz-option').forEach(b => b.disabled = true);
+                    const isCorrect = e.target.dataset.correct === 'true';
+                    const feedbackPanel = parent.querySelector('.feedback-panel');
+                    const feedbackText = parent.querySelector('.feedback-text');
+                    
+                    if (isCorrect) {
+                        e.target.classList.add('bg-emerald-500/30', 'border-emerald-500', 'ring-2', 'ring-emerald-500');
+                    } else {
+                        e.target.classList.add('bg-red-500/30', 'border-red-500');
+                        parent.querySelector('[data-correct="true"]').classList.add('bg-emerald-500/30', 'border-emerald-500');
+                    }
+                    feedbackText.textContent = explanation;
+                    feedbackPanel.classList.remove('hidden');
+                };
+            });
+        }
+        
+        // --- AI Tutor Chat Functions ---
+        function setupTutor() {
+            tutorContent.innerHTML = `
+                <h2 class="text-2xl font-bold text-indigo-400 mb-4">AI Tutor: ${selectedStep.title}</h2>
+                <div id="chatWindow" class="flex-grow bg-slate-900/50 rounded-t-lg p-4 flex flex-col gap-4 overflow-y-auto">
+                    <div class="chat-bubble-ai p-3 rounded-lg max-w-xl">Ask me anything about ${selectedStep.title}!</div>
+                </div>
+                <form id="chatForm" class="flex gap-2 border-t border-slate-700 p-4">
+                    <input id="chatInput" type="text" placeholder="Ask a follow-up question..." class="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2"><i data-lucide="send"></i></button>
+                </form>
+            `;
+            document.getElementById('chatForm').addEventListener('submit', handleChatSubmit);
+            lucide.createIcons();
+        }
+
+        async function handleChatSubmit(e) {
+            e.preventDefault();
+            const chatInput = document.getElementById('chatInput');
+            const question = chatInput.value.trim();
+            if (!question) return;
+
+            const fullHistory = [
+                ...chatHistory,
+                { role: 'user', parts: [{ text: question }] }
+            ];
+
+            addMessageToChat('user', question);
+            chatInput.value = '';
+            const thinkingIndicator = addMessageToChat('ai', '...');
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mainTopic: currentTopic,
+                        subTopic: selectedStep.title,
+                        history: fullHistory
+                    })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to get response from tutor.');
+                }
+                const data = await response.json();
+                
+                thinkingIndicator.textContent = data.text;
+
+                chatHistory.push({ role: 'user', parts: [{ text: question }] });
+                chatHistory.push({ role: 'model', parts: [{ text: data.text }] });
+
+            } catch (error) {
+                thinkingIndicator.textContent = `Error: ${error.message}`;
+                thinkingIndicator.classList.add('text-red-400');
+            }
+        }
+
+        function addMessageToChat(role, text) {
+            const chatWindow = document.getElementById('chatWindow');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `p-3 rounded-lg max-w-xl ${role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`;
+            messageDiv.textContent = text;
+            chatWindow.appendChild(messageDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            return messageDiv;
+        }
+
+
+        // --- Compare & Contrast ---
+        async function generateComparison() {
+            const concept1 = document.getElementById('concept1').value.trim();
+            const concept2 = document.getElementById('concept2').value.trim();
+            if(!concept1 || !concept2) {
+                showError("Please enter both concepts to compare.");
+                return;
+            }
+            hideError();
+            comparisonResult.innerHTML = '<div class="loader mx-auto"></div>';
+            try {
+                const systemPrompt = `Create a markdown comparison table between '${concept1}' and '${concept2}'. Compare them on at least 4 key aspects.`;
+                const markdownTable = await callAIApi(systemPrompt, false);
+                comparisonResult.innerHTML = markdownTable; 
+            } catch (error) {
+                comparisonResult.innerHTML = `<p class="text-red-400">${error.message}</p>`;
+            }
+        }
+
+        // --- Event Listeners & UI ---
+        generateBtn.addEventListener('click', generateRoadmap);
+        topicInput.addEventListener('keyup', (e) => e.key === 'Enter' && generateRoadmap());
+        compareBtn.addEventListener('click', generateComparison);
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active', 'flex', 'flex-col'));
+            const activeContent = document.getElementById(`${tabName}Content`);
+            activeContent.classList.add('active', 'flex', 'flex-col');
+            lucide.createIcons();
+        }
+
+        tabs.addEventListener('click', (e) => {
+            const tab = e.target.closest('.tab');
+            if(tab) switchTab(tab.dataset.tab);
+        });
+    </script>
+</body>
+</html>
+
